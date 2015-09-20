@@ -12,7 +12,7 @@ Note: due to the fact that video captioning research has gradually converged to 
 1. Dependencies
   1. [Theano](http://deeplearning.net/software/theano/) can be easily installed by following the instructions there. Theano has its own dependencies as well. The simpliest way to install Theano is to install [Anaconda](https://store.continuum.io/cshop/anaconda/). Instead of using Theano coming with Anaconda, we suggest running `git clone git://github.com/Theano/Theano.git` to get the most recent version of Theano. 
   2. [coco-caption](https://github.com/tylin/coco-caption). Install it by simply adding it into your `$PATHONPATH`.
-  3. [Jobman](http://deeplearning.net/software/jobman/install.html). After it has been git cloned, please add it into '$PYTHONPATH' as well. 
+  3. [Jobman](http://deeplearning.net/software/jobman/install.html). After it has been git cloned, please add it into `$PYTHONPATH` as well. 
 2. Download the preprocessed version of Youtube2Text. It is a zip file that contains everything needed to train the model. Unzip it somewhere. By default, unzip will create a folder `youtube2text_iccv15` that contains 8 `pkl` files. To require the download link, please send me an email at li.yao@umontreal.ca.
 3. Go to `common.py` and change the following two line `RAB_DATASET_BASE_PATH = '/data/lisatmp3/yaoli/datasets/'` and `RAB_EXP_PATH = '/data/lisatmp3/yaoli/exp/'` according to your specific setup. The first path is the parent dir path containing `youtube2text_iccv15` dataset folder. The second path specifies where you would like to save all the experimental results.
 4. Before training the model, we suggest to test `data_engine.py` by running `python data_engine.py` without any error.
@@ -26,7 +26,7 @@ Running `train_model.py` for the first time takes much longer since Theano needs
 
 
 #####Bonus
-In the paper, we never mentioned the use of uni-directional/bi-directional LSTMs to encode video representations. There has been some work related to it in several other recent papers. So we provide codes for a more sophicated encoder as well. 
+In the paper, we never mentioned the use of uni-directional/bi-directional LSTMs to encode video representations. But this is an obvious extension. In fact, there has been some work related to it in several other recent papers following ours. So we provide codes for more sophicated encoders as well. 
 
 If you have any questions, drop us email at li.yao@umontreal.ca.
 
