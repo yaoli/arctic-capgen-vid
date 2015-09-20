@@ -180,3 +180,23 @@ def compute_score(
         return scores_final
     
     return scores_final, processes, queue, rqueue, shared_params    
+
+def test_cocoeval():
+    engine = data_engine.Movie2Caption('attention', 'youtube2text',
+                                           video_feature='googlenet',
+                                           mb_size_train=20,
+                                           mb_size_test=20,
+                                           maxlen=50, n_words=20000,
+                                           n_frames=20, outof=None)
+    samples_valid = common.load_txt_file('./test/valid_samples.txt')
+    samples_test = common.load_txt_file('./test/test_samples.txt')
+    samples_valid = [sample.strip() for sample in samples_valid]
+    samples_test = [sample.strip() for sample in samples_test]
+
+    samples_valid = build_sample_pairs(samples_valid, engine.valid_ids)
+    samples_test = build_sample_pairs(samples_test, engine.test_ids)
+    valid_score, test_score = score_with_cocoeval(samples_valid, samples_test, engine)
+    print valid_score, test_score
+
+if __name__ == '__main__':
+    test_cocoeval()

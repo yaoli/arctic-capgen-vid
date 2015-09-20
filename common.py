@@ -311,3 +311,9 @@ def create_dir_if_not_exist(directory):
 def flatten_list_of_list(l):
     # l is a list of list
     return [item for sublist in l for item in sublist]
+
+def load_txt_file(path):
+    f = open(path,'r')
+    lines = f.readlines()
+    f.close()
+    return lines

@@ -10,7 +10,7 @@ config = DD({
     'erase_history': True,
     'attention': DD({
         'reload_': False,
-        'save_model_dir': exp_path + 'capgen_vid_iccv15_release/test_non/',
+        'save_model_dir': exp_path + 'arctic-capgen-vid/test_non/',
         'from_dir': '',
         'dataset': 'youtube2text', 
         'video_feature': 'googlenet',
