@@ -1,5 +1,5 @@
 '''
-Build a soft-attention-based image caption generator
+Build a soft-attention-based video caption generator
 '''
 import theano
 import theano.tensor as tensor
