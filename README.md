@@ -24,4 +24,7 @@ Note: due to the fact that video captioning research has gradually converged to 
 #####Note on running experiments
 Running `train_model.py` for the first time takes much longer since Theano needs to compile for the first time lots of things and cache on disk for the future runs. You will probably see some warning messages on stdout. It is safe to ignore all of them. Both model parameters and configurations are saved (the saving path is printed out on stdout, easy to find). The most important thing to monitor is `train_valid_test.txt` in the exp output folder. It is a big table saving all metrics per validation. Please refer to `model_attention.py` line 1207 -- 1215 for actual meaning of columns. 
 
+#####Bonus
+In the paper, we never mentioned the use of uni-directional/bi-directional LSTMs to encode video representations. There has been some work related to it in several other recent papers. So we provide codes for a more sophicated encoder as well. 
+
 If you have any questions, drop us email at li.yao@umontreal.ca. Happy coding!
