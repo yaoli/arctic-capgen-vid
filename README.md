@@ -28,5 +28,5 @@ Running `train_model.py` for the first time takes much longer since Theano needs
 #####Bonus
 In the paper, we never mentioned the use of uni-directional/bi-directional LSTMs to encode video representations. There has been some work related to it in several other recent papers. So we provide codes for a more sophicated encoder as well. 
 
-If you have any questions, drop us email at li.yao@umontreal.ca. Happy coding!
+If you have any questions, drop us email at li.yao@umontreal.ca.
 
