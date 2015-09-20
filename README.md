@@ -4,3 +4,4 @@ This package contains the accompanying code for the following paper:
 preprint arXiv: ([PDF](http://arxiv.org/pdf/1502.08029v4.pdf),
 [BibTeX](https://raw.github.com/yaoli/arctic-capgen-vid/master/reference.bib))
 
+### instructions (coming soon...)
