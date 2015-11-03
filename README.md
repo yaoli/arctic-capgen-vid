@@ -5,7 +5,7 @@ preprint arXiv: ([PDF](http://arxiv.org/pdf/1502.08029v4.pdf),
 [BibTeX](https://raw.github.com/yaoli/arctic-capgen-vid/master/reference.bib),
 [Video](https://youtu.be/Q6BiLAxJtXk))
 
-With the default setup in `settings.py`, you will be able to train a model on YouTube2Text, reproducing (in fact better than) the results corresponding to the 3rd row in Table 1 where a global temporal attention model is applied on features extracted by GoogLenet. 
+With the default setup in `config.py`, you will be able to train a model on YouTube2Text, reproducing (in fact better than) the results corresponding to the 3rd row in Table 1 where a global temporal attention model is applied on features extracted by GoogLenet. 
 
 Note: due to the fact that video captioning research has gradually converged to using [coco-caption](https://github.com/tylin/coco-caption) as the standard toolbox for evaluation. We intergrate this into this package. In the paper, however, a different tokenization methods was used, and the results from this package is *not* strictly comparable with the one reported in the paper. 
 
