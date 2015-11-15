@@ -29,5 +29,10 @@ Running `train_model.py` for the first time takes much longer since Theano needs
 #####Bonus
 In the paper, we never mentioned the use of uni-directional/bi-directional LSTMs to encode video representations. But this is an obvious extension. In fact, there has been some work related to it in several other recent papers following ours. So we provide codes for more sophicated encoders as well. 
 
+#####Trouble shooting
+This is a known problem in COCO evaluation script (their code) where METEOR are computed by creating another subprocess, which does not get killed automatically. As METEOR is called more and more, it eats up mem gradually. 
+To fix the problem, add this line after line https://github.com/tylin/coco-caption/blob/master/pycocoevalcap/meteor/meteor.py#L44
+`self.meteor_p.kill()`
+
 If you have any questions, drop us email at li.yao@umontreal.ca.
 
