@@ -4,6 +4,7 @@ This package contains the accompanying code for the following paper:
 preprint arXiv: ([PDF](http://arxiv.org/pdf/1502.08029v4.pdf),
 [BibTeX](https://raw.github.com/yaoli/arctic-capgen-vid/master/reference.bib),
 [Video](https://youtu.be/Q6BiLAxJtXk))
+[Poster with follow-up works](https://drive.google.com/open?id=0B_l-xTvrRJiESnJ0SXVMWGFvemc)
 
 With the default setup in `config.py`, you will be able to train a model on YouTube2Text, reproducing (in fact better than) the results corresponding to the 3rd row in Table 1 where a global temporal attention model is applied on features extracted by GoogLenet. 
 
