@@ -25,7 +25,8 @@ Note: due to the fact that video captioning research has gradually converged to 
   3. [Jobman](http://deeplearning.net/software/jobman/install.html). After it has been git cloned, please add it into `$PYTHONPATH` as well. 
 2. Download the preprocessed version of Youtube2Text. It is a zip file that contains everything needed to train the model. Unzip it somewhere. By default, unzip will create a folder `youtube2text_iccv15` that contains 8 `pkl` files. 
 
-[download link](http://lisaweb.iro.umontreal.ca/transfert/lisa/users/yaoli/youtube2text_iccv15.zip)
+[preprocessed YouTube2Text download link](http://lisaweb.iro.umontreal.ca/transfert/lisa/users/yaoli/youtube2text_iccv15.zip)
+
 3. Go to `common.py` and change the following two line `RAB_DATASET_BASE_PATH = '/data/lisatmp3/yaoli/datasets/'` and `RAB_EXP_PATH = '/data/lisatmp3/yaoli/exp/'` according to your specific setup. The first path is the parent dir path containing `youtube2text_iccv15` dataset folder. The second path specifies where you would like to save all the experimental results.
 4. Before training the model, we suggest to test `data_engine.py` by running `python data_engine.py` without any error.
 5. It is also useful to verify coco-caption evaluation pipeline works properly by running `python metrics.py` without any error.
