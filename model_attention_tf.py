@@ -48,7 +48,7 @@ class Attention_LSTM_decoder(object):
         self.options = options
         
     def init_params(self):
-        print 'init params'
+        print 'init params of attention lstm decoder'
         ctx_dim = self.options['ctx_dim']
         word_dim = self.options['dim_word']
         dim = self.options['dim']
@@ -77,10 +77,10 @@ class Attention_LSTM_decoder(object):
         names = [param.name for param in self.params]
         self.params = OrderedDict(zip(names, self.params))
         
-    def fprop(self, emb, context, init_state, init_memory):
+    def fprop(self, emb, mask, context, init_state, init_memory):
         # emb (t,m,word_dim), mask (t,m), ctx (m, f, ctx_dim),
         # init_state, init_memory (m, dim)
-        print 'fprop'
+        print 'fprop of attention lstm decoder'
         W = get_param('lstm_W', self.params) # (word_dim, 4*dim)
         U = get_param('lstm_U', self.params) # (dim, 4*dim)
         Wc = get_param('lstm_Wc', self.params) # (ctx_dim, 4*dim)
@@ -95,8 +95,10 @@ class Attention_LSTM_decoder(object):
         n_samples = tf.shape(emb)[1]
         pctx = tensor_mat_multiply(context, Wc_att) + b_att # (m,f,ctx_dim)
         state_below = tensor_mat_multiply(emb, W) + b # (t,m,4*dim)
-        state_below_ta = tensor_array_ops.TensorArray(dtype=emb.dtype, size=nsteps)
+        state_below_ta = tensor_array_ops.TensorArray(dtype=state_below.dtype, size=nsteps)
         state_below_ta = state_below_ta.unpack(state_below)
+        mask_ta = tensor_array_ops.TensorArray(dtype=mask.dtype, size=nsteps)
+        mask_ta = mask_ta.unpack(mask)
         H = tensor_array_ops.TensorArray(dtype=emb.dtype, size=nsteps)
         counter = tf.constant(0, dtype=dtypes.int32, name="time")
         
@@ -110,6 +112,7 @@ class Attention_LSTM_decoder(object):
             # standard LSTM
             preact = tf.matmul(h, U) # (m,4*dim)
             x_ =  state_below_ta.read(t) # (m,4*dim)
+            m = mask_ta.read(t) # (m,)
             ctx_ = tf.matmul(ctx_, Wc) # (m, 4*dim)
             preact = preact + x_ + ctx_
             i, o, f, inp = tf.split(1, 4, preact)
@@ -118,7 +121,10 @@ class Attention_LSTM_decoder(object):
             f = tf.sigmoid(f)
             inp = tf.tanh(inp)
             c_new = f * c + i * inp
+            c_new = tf.expand_dims(m, 1) * c_new + tf.expand_dims(1. - m, 1) * c_new
             h_new = o * tf.tanh(c_new)
+            h_new = tf.expand_dims(m, 1) * h_new + tf.expand_dims(1. - m, 1) * h_new
+            
             H_ta_t = H_ta_t.write(t, h_new)
             return t + 1, h_new, c_new, H_ta_t
         unused_final_time, final_h, final_c, final_H = control_flow_ops.While(
@@ -147,10 +153,11 @@ class Attention_LSTM_decoder(object):
         
         ctx = tf.random_uniform(shape=[n_samples, n_frames, ctx_dim], seed=seed)
         emb = tf.random_uniform(shape=[n_timesteps, n_samples, dim_word], seed=seed)
+        mask = tf.ones([n_timesteps, n_samples])
         init_state = tf.zeros(shape=[n_samples, dim])
         init_memory = tf.zeros(shape=[n_samples, dim])
         self.init_params()
-        states = self.fprop(emb, ctx, init_state, init_memory) # (t,m,dim)
+        states = self.fprop(emb, mask, ctx, init_state, init_memory) # (t,m,dim)
         cost = tf.reduce_sum(states)
         # training
         self._lr = tf.Variable(0.0, trainable=False)
@@ -165,52 +172,58 @@ class Attention_LSTM_decoder(object):
                 train_cost, _ = session.run([cost, train_op])
                 print 'cost %.4f, minibatch time %.3f'%(train_cost, time.time()-t0)
 
-class Attention(object):
-    def __init__(self, options, channel):
+class Model(object):
+    def __init__(self, options, channel=None):
         self.options = options
         self.channel = channel
-        self.decoder = Attention_LSTM_decoder(options)
         
     def init_params(self):
+        print 'model init params'
         ctx_dim = self.options['ctx_dim']
-        word_dim = self.options['word_dim']
+        word_dim = self.options['dim_word']
         dim = self.options['dim']
+        n_words = self.options['n_words']
         # word embedding
-        Wemb = weight_variable(
-            shape=[self.options['n_words'], word_dim],
-            name='Wemb')
+        Wemb = tf.Variable(norm_weight(n_words, word_dim), name='Wemb')
         # mlp to initialize h and c of lstm
-        ff_init_state_W = weight_variable(shape=[ctx_dim, dim], name='ff_init_state_W')
-        ff_init_state_b = bias_variable(shape=[dim], name='ff_init_state_b')
-        ff_init_memory_W = weight_variable(shape=[ctx_dim, dim], name='ff_init_memory_W')
-        ff_init_memory_b = bias_variable(shape=[dim], name='ff_init_memory_b')
+        ff_init_state_W = tf.Variable(norm_weight(ctx_dim, dim),
+                                      name='ff_init_state_W')
+        ff_init_state_b = tf.Variable(numpy.zeros((dim,), dtype='float32'),
+                                      name='ff_init_state_b')
+        ff_init_memory_W = tf.Variable(norm_weight(ctx_dim, dim),
+                                       name='ff_init_memory_W')
+        ff_init_memory_b = tf.Variable(numpy.zeros((dim,), dtype='float32'),
+                                      name='ff_init_memory_b')
         
         # word prediction
-        ff_logistic_W = weight_variable(shape=[dim, self.options['n_words']],
-                                        name='ff_logistic_W')
-        ff_logistic_b = bias_variable(shape=[self.options['n_words']], name='ff_logistic_b')
+        ff_logistic_W = tf.Variable(norm_weight(dim, n_words),
+                                    name='ff_logistic_W')
+        ff_logistic_b = tf.Variable(numpy.zeros((n_words,), dtype='float32'),
+                                    name='ff_logistic_b')
 
-        
         params = [
             Wemb,
             ff_init_state_W, ff_init_state_b,
             ff_init_memory_W, ff_init_memory_b,
             ff_logistic_W, ff_logistic_b
-            ] + self.decoder.params
+            ]
         names = [param.name for param in params]
         self.params = OrderedDict(zip(names, params))
+        self.params.update(self.decoder.params)
         
     def fprop(self):
         # (n_words, n_samples)
-        x = tf.placeholder(tf.int64, name='caption')
-        mask = tf.placeholder(tf.float32, name='caption_mask')
-        ctx = tf.placeholder(tf.float32, name='context') # (m,f,1024)
-        mask_ctx = tf.placeholder(tf.float32, name='context_mask') # (m,f)
+        print 'model fprop'
+        x = tf.placeholder(tf.int64, name='x') # (t, m)
+        mask = tf.placeholder(tf.float32, name='mask') # (t, m)
+        ctx = tf.placeholder(tf.float32, name='ctx') # (m,f,1024)
+        mask_ctx = tf.placeholder(tf.float32, name='mask_ctx') # (m,f)
         self.x = x
         self.mask = mask
         self.ctx = ctx
         self.mask_ctx = mask_ctx
-        n_timesteps, n_samples, _ = tf.shape(x)
+        n_timesteps = tf.shape(x)[0]
+        n_samples = tf.shape(x)[1]
 
         # build graph
         # --------------------------------------
@@ -218,30 +231,36 @@ class Attention(object):
         emb_ = get_param('Wemb', self.params)
         emb = tf.reshape(
             tf.gather(emb_, tf.reshape(x, [-1])),
-            [n_timesteps, n_samples, self.options['dim_word']])
+            tf.pack([n_timesteps, n_samples, self.options['dim_word']]))
         emb_zeros = tf.zeros_like(emb)
-        emb_shifted = tf.pack([emb_zeros[0], tf.gather(emb, tf.range(0, n_timesteps-1))])
+        header = tf.expand_dims(tf.gather(emb_zeros, 0), 0)
+        rest = tf.gather(emb, tf.range(0, n_timesteps-1))
+        emb_shifted = tf.concat(0, [header, rest])
         # mean ctx
         counts = tf.reduce_sum(mask_ctx, 1, keep_dims=True)
         ctx_mean = tf.reduce_sum(ctx, 1) / counts # (m, 1024)
         # init h and c
         init_state = tf.matmul(ctx_mean, get_param('ff_init_state_W', self.params)) + \
-          get_param('ff_init_state_b')
+          get_param('ff_init_state_b', self.params)
         init_memory = tf.matmul(ctx_mean, get_param('ff_init_memory_W', self.params)) + \
-          get_param('ff_init_memory_b')
+          get_param('ff_init_memory_b', self.params)
+
         # lstm
-        proj_h = self.decoder.fprop(emb, mask, ctx, init_state, init_memory) # (t,m,h)
+        proj_h = self.decoder.fprop(emb_shifted, mask, ctx, init_state, init_memory) # (t,m,h)
         # word prediction
         logit = tensor_mat_multiply(proj_h, get_param('ff_logistic_W', self.params)) + \
           get_param('ff_logistic_b', self.params) # (t,m,n_words)
         # loss function
-        a, b, c = tf.shape(logit)
-        logits = tf.reshape(logit, [a*b, c])
+        a = tf.shape(logit)[0]
+        b = tf.shape(logit)[1]
+        c = tf.shape(logit)[2]
+        logits = tf.reshape(logit, tf.pack([a*b, c]))
         labels = tf.reshape(x, [-1])
         loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits, labels) # (t*m)
-        loss_reshaped = tf.reshape(loss, [a, b]) # (t, m)
+        loss_reshaped = tf.reshape(loss, tf.pack([a, b])) # (t, m)
         loss_to_optimize = tf.reduce_sum(loss_reshaped * mask, 0) # (m,)
-
+        loss_to_optimize = tf.reduce_mean(loss_to_optimize)
+        
         return loss_to_optimize
     
     def train(self):
@@ -256,41 +275,61 @@ class Attention(object):
             self.options.n_words,
             self.options.K,
             self.options.OutOf)
-        options['ctx_dim'] = self.engine.ctx_dim
+        self.options['ctx_dim'] = self.engine.ctx_dim
 
+        self.decoder = Attention_LSTM_decoder(self.options)
+        self.decoder.init_params()
         # init params
-        self.init_params(options)
+        self.init_params()
 
         # build model 
         cost = self.fprop()
-
         # optimizer
-        optimizer = tf.train.GradientDescentOptimizer(self.options['lrate'])
-        train_step = optimizer.minimize(tf.reduce_sum(cost, 0))
-
+        tvars = tf.trainable_variables()
+        grads = tf.gradients(cost, tvars)
+        optimizer = tf.train.GradientDescentOptimizer(self.options.lrate)
+        train_op = optimizer.apply_gradients(zip(grads, tvars))
+        
         # start training
-        uidx = 0
-        for eidx in xrange(self.options['max_epochs']):
-            for idx in self.engine.kf_train:
-                tags = [self.engine.train[index] for index in idx]
-                uidx += 1
-                x, mask, ctx, ctx_mask = data_engine.prepare_data(
-                    self.engine, tags)
-                train_step.run(feed_dict={
-                    self.x: x,
-                    self.mask: mask,
-                    self.ctx: ctx,
-                    self.mask_ctx: ctx_mask
-                    })
-                
+        with tf.Session() as session:
+            tf.initialize_all_variables().run()
+            uidx = 0
+            for eidx in xrange(self.options['max_epochs']):
+                for idx in self.engine.kf_train:
+                    tags = [self.engine.train[index] for index in idx]
+                    uidx += 1
+                    x, mask, ctx, ctx_mask = data_engine.prepare_data(
+                        self.engine, tags)
+                    t0 = time.time()
+                    train_cost, _ = session.run(
+                        [cost, train_op],
+                        feed_dict={
+                            self.x: x,
+                            self.mask: mask,
+                            self.ctx: ctx,
+                            self.mask_ctx: ctx_mask
+                            })
+                    print 'cost %.4f, minibatch time %.3f'%(train_cost, time.time()-t0)
+
 def train_from_scratch(state, channel):
     t0 = time.time()
     print 'training an attention model'
     model = Attention(options, channel)
     model.train()
     print 'training time in total %.4f sec'%(time.time()-t0)
-    
-if __name__ == '__main__':
+
+def test_att_cond_lstm():
     from config import config
     model = Attention_LSTM_decoder(config.attention)
     model.test()
+
+def test_model():
+    from config import config
+    config.attention.dim_word = 64
+    config.attention.dim = 32
+    model = Model(config.attention)
+    model.train()
+    
+if __name__ == '__main__':
+    #test_att_cond_lstm()
+    test_model()
