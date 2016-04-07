@@ -14,19 +14,9 @@ import time
 import warnings
 from collections import OrderedDict
 
-from sklearn.cross_validation import KFold
-from scipy import optimize, stats
-
 import data_engine
 import metrics
-import common
-
-
 from common import *
-
-base_path = None
-hostname = socket.gethostname()
-lscratch_dir = None
 
 # make prefix-appended name
 def _p(pp, name):
@@ -840,9 +830,9 @@ class Attention(object):
                              n_done, n_samples))
                 sys.stdout.flush()
         print
-        probs = common.flatten_list_of_list(probs)
-        NLL = common.flatten_list_of_list(NLL)
-        L = common.flatten_list_of_list(L)
+        probs = flatten_list_of_list(probs)
+        NLL = flatten_list_of_list(NLL)
+        L = flatten_list_of_list(L)
         perp = 2**(numpy.sum(NLL) / numpy.sum(L) / numpy.log(2))
         return -1 * numpy.mean(probs), perp
 
@@ -886,7 +876,7 @@ class Attention(object):
               verbose=True,
               debug=True
               ):
-        self.rng_numpy, self.rng_theano = common.get_two_rngs()
+        self.rng_numpy, self.rng_theano = get_two_rngs()
 
         model_options = locals().copy()
         if 'self' in model_options:

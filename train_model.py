@@ -5,7 +5,7 @@ import time
 from config import config
 from jobman import DD, expand
 import common
-import model_attention
+import model_attention, model_attention_tf
 
     
 def set_config(conf, args, add_new_key=False):
@@ -79,7 +79,10 @@ def train_from_scratch(config, state, channel):
     print 'Host:    %s' % socket.gethostname()
     print 'Command: %s' % ' '.join(sys.argv)
     if config.model == 'attention':
-        model_attention.train_from_scratch(state, channel)
+        if config.run_with == 'theano':
+            model_attention.train_from_scratch(state, channel)
+        elif config.run_with == 'tensorflow':
+            model_attention_tf.train_from_scratch(state, channel)
     else:
         raise NotImplementedError()
         

@@ -4,13 +4,15 @@ import common
 exp_path = common.get_rab_exp_path()
 
 config = DD({
+    # run with 'theano' or 'tensorflow'
+    'run_with': 'theano', 
     'model': 'attention',
     'random_seed': 1234,
     # ERASE everything under save_model_path
     'erase_history': True,
     'attention': DD({
         'reload_': False,
-        'save_model_dir': exp_path + 'arctic-capgen-vid/test_non/',
+        'save_model_dir': exp_path + 'arctic-capgen-vid/test/',
         'from_dir': '',
         'dataset': 'youtube2text', 
         'video_feature': 'googlenet',
@@ -27,7 +29,7 @@ config = DD({
         'decay_c':1e-4,
         'alpha_entropy_r': 0.,
         'alpha_c':0.70602,
-        'lrate':0.0001,
+        'lrate':0.01,
         'selector':True,
         'n_words':20000, 
         'maxlen':30, # max length of the descprition
