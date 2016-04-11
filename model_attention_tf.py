@@ -1,4 +1,4 @@
-import os, sys, time, warnings
+import os, sys, time, warnings, copy
 import cPickle as pkl
 from collections import OrderedDict
 
@@ -77,9 +77,14 @@ class Attention_LSTM_decoder(object):
         names = [param.name for param in self.params]
         self.params = OrderedDict(zip(names, self.params))
         
-    def fprop(self, emb, mask, context, init_state, init_memory):
+    def fprop(self, emb, mask, context, init_state, init_memory, one_step=False):
+        # in training time
         # emb (t,m,word_dim), mask (t,m), ctx (m, f, ctx_dim),
         # init_state, init_memory (m, dim)
+
+        # in the sampling time
+        # emb (m, word_dim), mask (1, 1), ctx (f, ctx_dim)
+        # init_state, init_memory (1, dim)
         print 'fprop of attention lstm decoder'
         W = get_param('lstm_W', self.params) # (word_dim, 4*dim)
         U = get_param('lstm_U', self.params) # (dim, 4*dim)
@@ -91,6 +96,10 @@ class Attention_LSTM_decoder(object):
         U_att = get_param('lstm_U_att', self.params) # (ctx_dim, 1)
         c_att = get_param('lstm_c_att', self.params) # (1,)
 
+        if one_step:
+            # this is for the case of building the sampling function
+            emb = tf.expand_dims(emb, 0) # (1,m,word_dim)
+            context = tf.expand_dims(context, 0) # (1,f,ctx_dim)
         nsteps = tf.shape(emb)[0]
         n_samples = tf.shape(emb)[1]
         pctx = tensor_mat_multiply(context, Wc_att) + b_att # (m,f,ctx_dim)
@@ -107,7 +116,9 @@ class Attention_LSTM_decoder(object):
             pstate_ = tf.matmul(h, Wd_att) # (m,ctx_dim)
             pctx_ = pctx + tf.expand_dims(pstate_, 1) # (m,f,ctx_dim)
             pctx_ = tf.tanh(pctx_)
-            alpha = tf.squeeze(tensor_mat_multiply(pctx_, U_att)) + c_att # (m,f)
+            tt = tensor_mat_multiply(pctx_, U_att)
+            tt = tf.reshape(tt, tf.pack([tf.shape(tt)[0], tf.shape(tt)[1]]))
+            alpha = tt + c_att # (m,f)
             ctx_ = tf.reduce_sum(context * tf.expand_dims(alpha, 2), 1) # (m, ctx_dim)
             # standard LSTM
             preact = tf.matmul(h, U) # (m,4*dim)
@@ -137,7 +148,7 @@ class Attention_LSTM_decoder(object):
             name='attention_conditional_lstm'
             )
         final_H = final_H.pack()
-        return final_H
+        return final_H, final_h, final_c
     
     def test(self):
         n_timesteps = 5
@@ -157,7 +168,7 @@ class Attention_LSTM_decoder(object):
         init_state = tf.zeros(shape=[n_samples, dim])
         init_memory = tf.zeros(shape=[n_samples, dim])
         self.init_params()
-        states = self.fprop(emb, mask, ctx, init_state, init_memory) # (t,m,dim)
+        states, _, _ = self.fprop(emb, mask, ctx, init_state, init_memory) # (t,m,dim)
         cost = tf.reduce_sum(states)
         # training
         self._lr = tf.Variable(0.0, trainable=False)
@@ -211,7 +222,7 @@ class Model(object):
         self.params = OrderedDict(zip(names, params))
         self.params.update(self.decoder.params)
         
-    def fprop(self):
+    def build_model(self):
         # (n_words, n_samples)
         print 'model fprop'
         x = tf.placeholder(tf.int64, name='x') # (t, m)
@@ -246,7 +257,8 @@ class Model(object):
           get_param('ff_init_memory_b', self.params)
 
         # lstm
-        proj_h = self.decoder.fprop(emb_shifted, mask, ctx, init_state, init_memory) # (t,m,h)
+        proj_h, _, _ = self.decoder.fprop(
+            emb_shifted, mask, ctx, init_state, init_memory) # (t,m,dim)
         # word prediction
         logit = tensor_mat_multiply(proj_h, get_param('ff_logistic_W', self.params)) + \
           get_param('ff_logistic_b', self.params) # (t,m,n_words)
@@ -263,6 +275,41 @@ class Model(object):
         
         return loss_to_optimize
     
+    def build_sampler(self):
+        print 'build sampler'
+        ctx_s = tf.placeholder(tf.float32, name='ctx') # (f, d)
+        ctx_mask_s = tf.placeholder(tf.float32, name='ctx_mask') # (f)
+        counts = tf.reduce_sum(ctx_mask_s)
+        ctx_mean = tf.reduce_sum(ctx_s, 0, keep_dims=True) / counts # (1, d)
+        init_state = tf.matmul(ctx_mean, get_param('ff_init_state_W', self.params)) + \
+          get_param('ff_init_state_b', self.params)
+        init_memory = tf.matmul(ctx_mean, get_param('ff_init_memory_W', self.params)) + \
+          get_param('ff_init_memory_b', self.params)
+        # next word
+        x_s = tf.placeholder(tf.int32, name='x') # a vector
+        init_state_s = tf.placeholder(tf.float32, name='init_state')
+        init_memory_s = tf.placeholder(tf.float32, name='init_memory')
+        emb_ = get_param('Wemb', self.params)
+        emb = control_flow_ops.cond(
+            tf.equal(tf.shape(x_s)[0], 1),
+            lambda: tf.zeros((1, self.options['dim_word'])),
+            lambda: tf.gather(emb_, x_s))
+        
+        mask = tf.ones([1, 1])
+        H, next_state, next_memory = self.decoder.fprop(
+            emb, mask, ctx_s, init_state_s, init_memory_s, one_step=True)
+        # H: (1,1,dim)
+        # word prediction
+        logit = tensor_mat_multiply(H, get_param('ff_logistic_W', self.params)) + \
+          get_param('ff_logistic_b', self.params) # (t,m,n_words)
+        # loss function
+        logit = tf.squeeze(logit, [0])
+        next_probs = tf.nn.softmax(logit)
+        next_sample = tf.argmax(next_probs, 1)
+        return [ctx_s, ctx_mask_s, x_s, init_state_s, init_memory_s,
+                init_state, init_memory,
+                next_probs, next_sample, next_state, next_memory] 
+        
     def train(self):
         # init data engine
         self.engine = data_engine.Movie2Caption(
@@ -283,7 +330,11 @@ class Model(object):
         self.init_params()
 
         # build model 
-        cost = self.fprop()
+        cost = self.build_model()
+        [ctx_s_ph, ctx_mask_s_ph, x_s_ph, init_state_s_ph, init_memory_s_ph,
+         init_state_tv, init_memory_tv,
+         next_probs_tv, next_sample_tv,
+        next_state_tv, next_memory_tv]  = self.build_sampler()
         # optimizer
         tvars = tf.trainable_variables()
         grads = tf.gradients(cost, tvars)
@@ -310,7 +361,187 @@ class Model(object):
                             self.mask_ctx: ctx_mask
                             })
                     print 'cost %.4f, minibatch time %.3f'%(train_cost, time.time()-t0)
+                    def sample_execute(from_which):
+                        print '------------- sampling from %s ----------'%from_which
+                        if from_which == 'train':
+                            x_s = x
+                            mask_s = mask
+                            ctx_s = ctx
+                            ctx_mask_s = ctx_mask
 
+                        elif from_which == 'valid':
+                            idx = self.engine.kf_valid[numpy.random.randint(
+                                1, len(self.engine.kf_valid) - 1)]
+                            tags = [self.engine.valid[index] for index in idx]
+                            x_s, mask_s, ctx_s, ctx_mask_s = data_engine.prepare_data(
+                                self.engine, tags)
+                        for jj in xrange(numpy.minimum(10, x_s.shape[1])):
+                            sample, score = self.gen_sample(
+                                ctx_s_ph, ctx_mask_s_ph, x_s_ph,
+                                init_state_s_ph, init_memory_s_ph,
+                                init_state_tv, init_memory_tv, next_probs_tv, next_sample_tv,
+                                next_state_tv, next_memory_tv,
+                                session, ctx_s[jj], ctx_mask_s[jj], k=5, maxlen=30)
+                            best_one = numpy.argmin(score)
+                            sample = sample[0]
+                            print 'Truth ',jj,': ',
+                            for vv in x_s[:,jj]:
+                                if vv == 0:
+                                    break
+                                if vv in self.engine.word_idict:
+                                    print self.engine.word_idict[vv],
+                                else:
+                                    print 'UNK',
+                            print
+                            for kk, ss in enumerate([sample]):
+                                print 'Sample (', kk,') ', jj, ': ',
+                                for vv in ss:
+                                    if vv == 0:
+                                        break
+                                    if vv in self.engine.word_idict:
+                                        print self.engine.word_idict[vv],
+                                    else:
+                                        print 'UNK',
+                            print
+                    sample_execute(from_which='train')
+                    #sample_execute(from_which='valid')
+
+    def gen_sample(self, ctx_s_ph, ctx_mask_s_ph, x_s_ph,
+                   init_state_s_ph, init_memory_s_ph,
+                   init_state_tv, init_memory_tv,
+                   next_probs_tv, next_sample_tv, next_state_tv, next_memory_tv,
+                   session, ctx0, ctx_mask, k, maxlen, stochastic=False):
+        sample = []
+        sample_score = []
+
+        live_k = 1
+        dead_k = 0
+
+        hyp_samples = [[]] * live_k
+        hyp_scores = numpy.zeros(live_k).astype('float32')
+        hyp_states = []
+        hyp_memories = []
+
+        # [(26,1024),(512,),(512,)]
+        rval  = session.run([init_state_tv, init_memory_tv],
+                           feed_dict={ctx_s_ph: ctx0,
+                                      ctx_mask_s_ph: ctx_mask})
+        next_state = []
+        next_memory = []
+        n_layers_lstm = 1
+        
+        for lidx in xrange(n_layers_lstm):
+            next_state.append(rval[lidx])
+            #next_state[-1] = next_state[-1].reshape([live_k, next_state[-1].shape[0]])
+        for lidx in xrange(n_layers_lstm):
+            next_memory.append(rval[n_layers_lstm+lidx])
+            #next_memory[-1] = next_memory[-1].reshape([live_k, next_memory[-1].shape[0]])
+        next_w = -1 * numpy.ones((1,)).astype('int32')
+        # next_state: [(1,512)]
+        # next_memory: [(1,512)]
+        for ii in xrange(maxlen):
+            # return [(1, 50000), (1,), (1, 512), (1, 512)]
+            # next_w: vector
+            # ctx: matrix
+            # ctx_mask: vector
+            # next_state: [matrix]
+            # next_memory: [matrix]
+            rval = session.run(
+                [next_probs_tv, next_sample_tv, next_state_tv, next_memory_tv],
+                feed_dict={ctx_s_ph: ctx0,
+                            ctx_mask_s_ph: ctx_mask,
+                            x_s_ph: next_w,
+                            init_state_s_ph: next_state[0],
+                            init_memory_s_ph: next_memory[0]})
+            next_p = rval[0]
+            next_w = rval[1] # already argmax sorted
+            next_state = []
+            for lidx in xrange(n_layers_lstm):
+                next_state.append(rval[2+lidx])
+            next_memory = []
+            for lidx in xrange(n_layers_lstm):
+                next_memory.append(rval[2+n_layers_lstm+lidx])
+            if stochastic:
+                sample.append(next_w[0]) # take the most likely one
+                sample_score += next_p[0,next_w[0]]
+                if next_w[0] == 0:
+                    break
+            else:
+                # the first run is (1,50000)
+                cand_scores = hyp_scores[:,None] - numpy.log(next_p)
+                cand_flat = cand_scores.flatten()
+                ranks_flat = cand_flat.argsort()[:(k-dead_k)]
+
+                voc_size = next_p.shape[1]
+                trans_indices = ranks_flat / voc_size # index of row
+                word_indices = ranks_flat % voc_size # index of col
+                costs = cand_flat[ranks_flat]
+
+                new_hyp_samples = []
+                new_hyp_scores = numpy.zeros(k-dead_k).astype('float32')
+                new_hyp_states = []
+                for lidx in xrange(n_layers_lstm):
+                    new_hyp_states.append([])
+                new_hyp_memories = []
+                for lidx in xrange(n_layers_lstm):
+                    new_hyp_memories.append([])
+
+                for idx, [ti, wi] in enumerate(zip(trans_indices, word_indices)):
+                    new_hyp_samples.append(hyp_samples[ti]+[wi])
+                    new_hyp_scores[idx] = copy.copy(costs[ti])
+                    for lidx in xrange(n_layers_lstm):
+                        new_hyp_states[lidx].append(copy.copy(next_state[lidx][ti]))
+                    for lidx in xrange(n_layers_lstm):
+                        new_hyp_memories[lidx].append(copy.copy(next_memory[lidx][ti]))
+
+                # check the finished samples
+                new_live_k = 0
+                hyp_samples = []
+                hyp_scores = []
+                hyp_states = []
+                for lidx in xrange(n_layers_lstm):
+                    hyp_states.append([])
+                hyp_memories = []
+                for lidx in xrange(n_layers_lstm):
+                    hyp_memories.append([])
+
+                for idx in xrange(len(new_hyp_samples)):
+                    if new_hyp_samples[idx][-1] == 0:
+                        sample.append(new_hyp_samples[idx])
+                        sample_score.append(new_hyp_scores[idx])
+                        dead_k += 1
+                    else:
+                        new_live_k += 1
+                        hyp_samples.append(new_hyp_samples[idx])
+                        hyp_scores.append(new_hyp_scores[idx])
+                        for lidx in xrange(n_layers_lstm):
+                            hyp_states[lidx].append(new_hyp_states[lidx][idx])
+                        for lidx in xrange(n_layers_lstm):
+                            hyp_memories[lidx].append(new_hyp_memories[lidx][idx])
+                hyp_scores = numpy.array(hyp_scores)
+                live_k = new_live_k
+
+                if new_live_k < 1:
+                    break
+                if dead_k >= k:
+                    break
+
+                next_w = numpy.array([w[-1] for w in hyp_samples])
+                next_state = []
+                for lidx in xrange(n_layers_lstm):
+                    next_state.append(numpy.array(hyp_states[lidx]))
+                next_memory = []
+                for lidx in xrange(n_layers_lstm):
+                    next_memory.append(numpy.array(hyp_memories[lidx]))
+
+        if not stochastic:
+            # dump every remaining one
+            if live_k > 0:
+                for idx in xrange(live_k):
+                    sample.append(hyp_samples[idx])
+                    sample_score.append(hyp_scores[idx])
+        return sample, sample_score
+        
 def train_from_scratch(state, channel):
     t0 = time.time()
     print 'training an attention model'
