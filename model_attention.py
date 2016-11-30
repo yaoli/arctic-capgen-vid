@@ -753,7 +753,7 @@ class Attention(object):
 
                 for idx, [ti, wi] in enumerate(zip(trans_indices, word_indices)):
                     new_hyp_samples.append(hyp_samples[ti]+[wi])
-                    new_hyp_scores[idx] = copy.copy(costs[ti])
+                    new_hyp_scores[idx] = copy.copy(costs[idx])
                     for lidx in xrange(n_layers_lstm):
                         new_hyp_states[lidx].append(copy.copy(next_state[lidx][ti]))
                     for lidx in xrange(n_layers_lstm):
