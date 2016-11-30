@@ -10,7 +10,7 @@ This package contains the accompanying code for the following paper:
 
 [Poster with follow-up works](https://drive.google.com/open?id=0B_l-xTvrRJiESnJ0SXVMWGFvemc) that include 
 
-* \[2\] Li Yao, Nicolas Ballas, Kyunghyun Cho, John R. Smith, Yoshua Bengio [Empirical performance upper bounds for image and video captioning](http://arxiv.org/abs/1511.04590). International Conference of Learning Representations (ICLR) 2016. (workshop track)
+* \[2\] Li Yao, Nicolas Ballas, Kyunghyun Cho, John R. Smith, Yoshua Bengio [Oracle performance for visual captioning](http://arxiv.org/abs/1511.04590).  BRITISH MACHINE VISION CONFERENCE (BMVC) 2016 (oral).
 
 * \[3\] Nicolas Ballas, Li Yao, Chris Pal, Aaron Courville [Delving Deeper into Convolutional Networks for Learning Video Representations](http://arxiv.org/abs/1511.06432). International Conference of Learning Representations (ICLR) 2016. (conference track)
 
