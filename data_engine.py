@@ -167,7 +167,7 @@ class Movie2Caption(object):
             len(self.valid), self.mb_size_test)
         self.kf_test = common.generate_minibatch_idx(
             len(self.test), self.mb_size_test)
-        
+        import pdb; pdb.set_trace()
 def prepare_data(engine, IDs):
     seqs = []
     feat_list = []
