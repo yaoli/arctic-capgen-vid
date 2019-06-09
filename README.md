@@ -18,7 +18,7 @@ With the default setup in `config.py`, you will be able to train a model on YouT
 
 Note: due to the fact that video captioning research has gradually converged to using [coco-caption](https://github.com/tylin/coco-caption) as the standard toolbox for evaluation. We intergrate this into this package. In the paper, however, a different tokenization methods was used, and the results from this package is *not* strictly comparable with the one reported in the paper. 
 
-#####Please follow the instructions below to run this package
+##### Please follow the instructions below to run this package
 1. Dependencies
   1. [Theano](http://deeplearning.net/software/theano/) can be easily installed by following the instructions there. Theano has its own dependencies as well. The simpliest way to install Theano is to install [Anaconda](https://store.continuum.io/cshop/anaconda/). Instead of using Theano coming with Anaconda, we suggest running `git clone git://github.com/Theano/Theano.git` to get the most recent version of Theano. 
   2. [coco-caption](https://github.com/tylin/coco-caption). Install it by simply adding it into your `$PYTHONPATH`.
@@ -34,17 +34,20 @@ Note: due to the fact that video captioning research has gradually converged to 
   1. to run on cpu: `THEANO_FLAGS=mode=FAST_RUN,device=cpu,floatX=float32 python train_model.py`
   2. to run on gpu: `THEANO_FLAGS=mode=FAST_RUN,device=gpu,floatX=float32 python train_model.py`
 
-#####Notes on running experiments
+##### Notes on running experiments
 Running `train_model.py` for the first time takes much longer since Theano needs to compile for the first time lots of things and cache on disk for the future runs. You will probably see some warning messages on stdout. It is safe to ignore all of them. Both model parameters and configurations are saved (the saving path is printed out on stdout, easy to find). The most important thing to monitor is `train_valid_test.txt` in the exp output folder. It is a big table saving all metrics per validation. Please refer to `model_attention.py` line 1207 -- 1215 for actual meaning of columns. 
 
 
-#####Bonus
+##### Bonus
 In the paper, we never mentioned the use of uni-directional/bi-directional LSTMs to encode video representations. But this is an obvious extension. In fact, there has been some work related to it in several other recent papers following ours. So we provide codes for more sophicated encoders as well. 
 
-#####Trouble shooting
+##### Trouble shooting
 This is a known problem in COCO evaluation script (their code) where METEOR are computed by creating another subprocess, which does not get killed automatically. As METEOR is called more and more, it eats up mem gradually. 
 To fix the problem, add this line after line https://github.com/tylin/coco-caption/blob/master/pycocoevalcap/meteor/meteor.py#L44
 `self.meteor_p.kill()`
+
+##### Support for Python3.5
+Please refer to this [repo](https://github.com/Anirudh257/arctic-capgen-vid-version-3.5).
 
 If you have any questions, drop us email at li.yao@umontreal.ca.
 
